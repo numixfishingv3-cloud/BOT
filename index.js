@@ -42,7 +42,7 @@ client.on('ready', () => {
         } catch (error) {
             console.error('RSS Error:', error.message);
         }
-    }, 10000); 
+    }, 1800000); 
 });
 
 client.on('messageCreate', async (message) => {
