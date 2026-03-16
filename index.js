@@ -28,7 +28,7 @@ client.on('ready', () => {
             const channel = client.channels.cache.get(NEWS_CHANNEL_ID);
             if (!channel) return;
 
-            const feed = await parser.parseURL('https://www.blognone.com/atom.xml');
+            const feed = await parser.parseURL('https://news.thaipbs.or.th/rss/news/latest');
             const latestPost = feed.items[0];
             
             const embed = new EmbedBuilder()
@@ -42,7 +42,7 @@ client.on('ready', () => {
         } catch (error) {
             console.error('RSS Error:', error.message);
         }
-    }, 3600000); 
+    }, 10000); 
 });
 
 client.on('messageCreate', async (message) => {
