@@ -28,7 +28,7 @@ client.on('ready', () => {
             const channel = client.channels.cache.get(NEWS_CHANNEL_ID);
             if (!channel) return;
 
-            const feed = await parser.parseURL('https://news.thaipbs.or.th/rss/news/latest');
+            const feed = await parser.parseURL('https://www.blognone.com/atom.xml');
             const latestPost = feed.items[0];
             
             const embed = new EmbedBuilder()
@@ -42,7 +42,7 @@ client.on('ready', () => {
         } catch (error) {
             console.error('RSS Error:', error.message);
         }
-    }, 1800000); 
+    }, 3600000); 
 });
 
 client.on('messageCreate', async (message) => {
@@ -78,3 +78,15 @@ client.on('messageCreate', async (message) => {
 });
 
 client.login(DISCORD_TOKEN);
+
+// คำสั่งเช็กข่าวแบบกดมือ (พิมพ์ !test ใน Discord)
+client.on('messageCreate', async (message) => {
+    if (message.content === '!test') {
+        try {
+            const feed = await parser.parseURL('https://news.thaipbs.or.th/rss/news/latest');
+            message.reply(`ดึงข่าวได้แล้ว! หัวข้อคือ: ${feed.items[0].title}`);
+        } catch (err) {
+            message.reply(`ดึงข่าวไม่สำเร็จ: ${err.message}`);
+        }
+    }
+});
