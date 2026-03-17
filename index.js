@@ -109,19 +109,28 @@ client.on('messageCreate', async (message) => {
         }, time * 60000);
     }
 
-    // --- 3. คำสั่งทดสอบดึงข่าวล่าสุด (!test) ---
+// --- 3. คำสั่งทดสอบดึงข่าวล่าสุด (!test) แบบมีกรอบ ---
     if (message.content === '!test') {
         try {
             const feed = await parser.parseURL('https://news.google.com/rss/search?q=technology+when:1h&hl=th&gl=TH&ceid=TH:th');
-            if (feed.items.length > 0) {
-                message.reply(`✅ ระบบข่าว IT ทำงานปกติ! ข่าวล่าสุด: **${feed.items[0].title}**`);
+            const latestPost = feed.items[0];
+
+            if (latestPost) {
+                const testEmbed = new EmbedBuilder()
+                    .setColor(0x00BFFF)
+                    .setTitle(`✅ ทดสอบระบบข่าว: ${latestPost.title}`)
+                    .setURL(latestPost.link)
+                    .setDescription('ถ้าเห็นข้อความนี้ในกรอบ แสดงว่าระบบข่าวอัตโนมัติทำงานปกติครับ')
+                    .setFooter({ text: 'แหล่งข่าว: Google News IT' })
+                    .setTimestamp();
+
+                message.reply({ embeds: [testEmbed] });
             } else {
-                message.reply('⚠️ ดึงข่าวได้แต่ไม่มีข่าวใหม่ในชั่วโมงนี้');
+                message.reply('⚠️ ดึงข้อมูลได้ แต่ตอนนี้ยังไม่มีข่าว IT ใหม่ๆ ครับ');
             }
         } catch (err) {
             message.reply(`❌ ระบบข่าวมีปัญหา: ${err.message}`);
         }
     }
-});
 
 client.login(DISCORD_TOKEN);
