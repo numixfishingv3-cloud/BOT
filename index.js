@@ -3,6 +3,7 @@ const { GoogleGenerativeAI } = require("@google/generative-ai");
 const Parser = require('rss-parser');
 const parser = new Parser();
 
+// ดึงค่าจาก Environment Variables ใน Railway
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const NEWS_CHANNEL_ID = process.env.NEWS_CHANNEL_ID;
@@ -18,7 +19,7 @@ const client = new Client({
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-// ฟังก์ชันดึงข่าว IT ที่ปลอดภัยขึ้น
+// --- ฟังก์ชันดึงข่าว IT (รองรับความยืดหยุ่น 1h - 24h) ---
 async function getITNews(limit = 1) {
     try {
         let url = 'https://news.google.com/rss/search?q=technology+when:1h&hl=th&gl=TH&ceid=TH:th';
@@ -36,10 +37,11 @@ async function getITNews(limit = 1) {
     }
 }
 
-// เปลี่ยนเป็น clientReady เพื่อแก้คำเตือน DeprecationWarning
+// --- เมื่อบอทออนไลน์ ---
 client.on('clientReady', () => {
-    console.log(`✅ บอท ${client.user.tag} ออนไลน์พร้อมระบบข่าวแบบเสถียร!`);
+    console.log(`✅ บอท ${client.user.tag} ออนไลน์พร้อมใช้งานทุกระบบ!`);
     
+    // ระบบส่งข่าวอัตโนมัติทุก 30 นาที
     setInterval(async () => {
         try {
             const channel = client.channels.cache.get(NEWS_CHANNEL_ID);
@@ -53,7 +55,7 @@ client.on('clientReady', () => {
                     .setAuthor({ name: 'IT NEWS AUTO-UPDATE', iconURL: 'https://i.imgur.com/8nNf9fR.png' })
                     .setTitle(`💻 ข่าวไอทีล่าสุด: ${title.slice(0, 250)}`)
                     .setURL(news[0].link)
-                    .setDescription('อัปเดตเทคโนโลยีใหม่ล่าสุดส่งตรงถึงห้องคุณ')
+                    .setDescription('อัปเดตเทคโนโลยีล่าสุดส่งตรงถึงคุณ')
                     .addFields(
                         { name: '🌐 แหล่งข่าว', value: news[0].source?.text || 'Google News', inline: true },
                         { name: '📅 วันที่', value: news[0].pubDate || 'วันนี้', inline: true }
@@ -76,6 +78,7 @@ client.on('clientReady', () => {
     }, 1800000); 
 });
 
+// --- ระบบจัดการปุ่มกด ---
 client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
     if (interaction.customId === 'fetch_news_now') {
@@ -86,13 +89,13 @@ client.on('interactionCreate', async interaction => {
                 const title = news[0].title || "ไม่มีหัวข้อข่าว";
                 const embed = new EmbedBuilder()
                     .setColor(0x57F287)
-                    .setTitle(`🆕 ข่าวสดใหม่: ${title.slice(0, 250)}`)
+                    .setTitle(`🆕 ข่าวสดใหม่ (เรียกผ่านปุ่ม): ${title.slice(0, 250)}`)
                     .setURL(news[0].link)
                     .setDescription(`ดึงข้อมูลล่าสุดเมื่อ: <t:${Math.floor(Date.now() / 1000)}:R>`)
                     .setTimestamp();
                 await interaction.editReply({ embeds: [embed] });
             } else {
-                await interaction.editReply({ content: '❌ ตอนนี้ไม่สามารถดึงข่าวได้ครับ' });
+                await interaction.editReply({ content: '❌ ไม่สามารถดึงข่าวได้ในขณะนี้' });
             }
         } catch (err) {
             console.error(err);
@@ -100,9 +103,11 @@ client.on('interactionCreate', async interaction => {
     }
 });
 
+// --- ระบบจัดการข้อความ ---
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
+    // 1. คำสั่ง !ข่าว [ตัวเลข]
     if (message.content.startsWith('!ข่าว')) {
         const args = message.content.split(' ');
         const num = parseInt(args[1]) || 1;
@@ -117,34 +122,58 @@ client.on('messageCreate', async (message) => {
             .setTimestamp();
 
         newsList.forEach((news, index) => {
-            // แก้ไขจุดที่ทำให้แครช: ตรวจสอบว่ามี Title หรือไม่
-            const fieldName = news.title ? `${index + 1}. ${news.title.slice(0, 250)}` : `${index + 1}. คลิกเพื่ออ่านรายละเอียด`;
-            const fieldValue = news.link ? `[คลิกเพื่ออ่านเพิ่มเติม](${news.link})` : 'ไม่มีลิงก์ข่าว';
+            const fieldName = news.title ? `${index + 1}. ${news.title.slice(0, 250)}` : `${index + 1}. หัวข้อข่าว`;
+            const fieldValue = news.link ? `[คลิกเพื่ออ่านเพิ่มเติม](${news.link})` : 'ไม่มีลิงก์';
             embed.addFields({ name: fieldName, value: fieldValue });
         });
 
         message.reply({ embeds: [embed] });
     }
 
+    // 2. คำสั่ง !ถาม (AI Gemini)
     if (message.content.startsWith('!ถาม')) {
         const prompt = message.content.replace('!ถาม', '').trim();
-        if (!prompt) return message.reply('พิมพ์คำถามมาได้เลย!');
+        if (!prompt) return message.reply('พิมพ์คำถามมาได้เลยครับ!');
         try {
             const result = await model.generateContent(prompt);
-            const aiEmbed = new EmbedBuilder().setColor(0x5865F2).setDescription(result.response.text().slice(0, 4000)).setTimestamp();
+            const aiEmbed = new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setAuthor({ name: 'Gemini AI Assistant', iconURL: client.user.displayAvatarURL() })
+                .setDescription(result.response.text().slice(0, 4000))
+                .setTimestamp();
             await message.reply({ embeds: [aiEmbed] });
-        } catch (e) { message.reply('❌ AI Error'); }
+        } catch (e) { message.reply('❌ AI ประมวลผลผิดพลาด'); }
     }
 
+    // 3. คำสั่ง !เตือน [นาที] [เรื่อง]
     if (message.content.startsWith('!เตือน')) {
         const args = message.content.split(' ');
         const time = parseInt(args[1]);
         const note = args.slice(2).join(' ');
         if (!isNaN(time) && note) {
-            message.reply(`🕒 จะเตือนเรื่อง **"${note}"** ในอีก ${time} นาที`);
+            message.reply(`🕒 จะเตือนเรื่อง **"${note}"** ในอีก ${time} นาทีครับ`);
             setTimeout(() => {
-                message.reply({ content: `<@${message.author.id}>`, embeds: [new EmbedBuilder().setColor(0xED4245).setTitle('🔔 แจ้งเตือน!').setDescription(note)] });
+                const alertEmbed = new EmbedBuilder().setColor(0xED4245).setTitle('🔔 แจ้งเตือน!').setDescription(note).setTimestamp();
+                message.reply({ content: `<@${message.author.id}>`, embeds: [alertEmbed] });
             }, time * 60000);
+        }
+    }
+
+    // 4. คำสั่ง !test (ทดสอบระบบข่าว)
+    if (message.content === '!test') {
+        try {
+            const news = await getITNews(1);
+            if (news.length > 0) {
+                const testEmbed = new EmbedBuilder()
+                    .setColor(0x57F287)
+                    .setTitle(`✅ ระบบข่าวปกติ: ${news[0].title.slice(0, 250)}`)
+                    .setURL(news[0].link)
+                    .setFooter({ text: 'ดึงข้อมูลสำเร็จ' })
+                    .setTimestamp();
+                message.reply({ embeds: [testEmbed] });
+            }
+        } catch (err) {
+            message.reply(`❌ Error: ${err.message}`);
         }
     }
 });
