@@ -55,7 +55,6 @@ client.on('clientReady', () => {
                     .setAuthor({ name: 'IT NEWS AUTO-UPDATE', iconURL: 'https://i.imgur.com/8nNf9fR.png' })
                     .setTitle(`💻 ข่าวไอทีล่าสุด: ${title.slice(0, 250)}`)
                     .setURL(news[0].link)
-                    .setDescription('อัปเดตเทคโนโลยีล่าสุดส่งตรงถึงคุณ')
                     .addFields(
                         { name: '🌐 แหล่งข่าว', value: news[0].source?.text || 'Google News', inline: true },
                         { name: '📅 วันที่', value: news[0].pubDate || 'วันนี้', inline: true }
@@ -159,7 +158,7 @@ client.on('messageCreate', async (message) => {
         }
     }
 
-    // 4. คำสั่ง !test (ทดสอบระบบข่าว)
+    // 4. คำสั่ง !test (มีปุ่มโผล่มาให้ทดสอบเลย)
     if (message.content === '!test') {
         try {
             const news = await getITNews(1);
@@ -168,9 +167,17 @@ client.on('messageCreate', async (message) => {
                     .setColor(0x57F287)
                     .setTitle(`✅ ระบบข่าวปกติ: ${news[0].title.slice(0, 250)}`)
                     .setURL(news[0].link)
-                    .setFooter({ text: 'ดึงข้อมูลสำเร็จ' })
+                    .setDescription('กดปุ่มด้านล่างเพื่อทดสอบระบบดึงข่าวสดใหม่ครับ')
                     .setTimestamp();
-                message.reply({ embeds: [testEmbed] });
+
+                const row = new ActionRowBuilder().addComponents(
+                    new ButtonBuilder()
+                        .setCustomId('fetch_news_now')
+                        .setLabel('🔄 ดึงข่าวใหม่ทันที')
+                        .setStyle(ButtonStyle.Primary)
+                );
+
+                message.reply({ embeds: [testEmbed], components: [row] });
             }
         } catch (err) {
             message.reply(`❌ Error: ${err.message}`);
