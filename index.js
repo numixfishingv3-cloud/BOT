@@ -7,6 +7,7 @@ const parser = new Parser();
 const DISCORD_TOKEN = process.env.DISCORD_TOKEN;
 const GEMINI_API_KEY = process.env.GEMINI_API_KEY;
 const NEWS_CHANNEL_ID = process.env.NEWS_CHANNEL_ID;
+const MUSIC_ROOM_ID = "1359908768279957565"; // ไอดีห้องเปิดเพลงที่คุณให้มา
 
 const client = new Client({
     intents: [
@@ -27,7 +28,7 @@ async function getITNewsWithSummary(limit = 1) {
         let feed = await parser.parseURL(url);
         let items = feed.items.slice(0, limit);
         for (let item of items) {
-            const result = await model.generateContent(`สรุปข่าวนี้สั้นๆ 3 บรรทัดให้ดูน่าตื่นเต้น: ${item.title}`);
+            const result = await model.generateContent(`สรุปข่าวนี้ 3 บรรทัดให้ดูน่าสนใจ: ${item.title}`);
             item.summary = result.response.text();
         }
         return items;
@@ -43,7 +44,7 @@ async function getCryptoPrice(coin) {
 }
 
 client.on('clientReady', () => {
-    console.log(`🎬 ${client.user.tag} เข้าสู่โหมด Entertainment Pro Max!`);
+    console.log(`🎬 ${client.user.tag} พร้อมให้บริการพร้อมระบบแนะนำห้องเพลง!`);
     
     // ระบบส่งข่าวอัตโนมัติทุก 30 นาที
     setInterval(async () => {
@@ -52,13 +53,13 @@ client.on('clientReady', () => {
         const news = await getITNewsWithSummary(1);
         if (news.length > 0) {
             const embed = new EmbedBuilder()
-                .setColor(0xFF00FF)
-                .setTitle(`🔥 ข่าวเด่นไอที: ${news[0].title}`)
+                .setColor(0x00BFFF)
+                .setTitle(`📰 อัปเดตไอที: ${news[0].title}`)
                 .setDescription(news[0].summary)
                 .setTimestamp();
             const row = new ActionRowBuilder().addComponents(
-                new ButtonBuilder().setCustomId('fetch_news_now').setLabel('🔄 ข่าวใหม่').setStyle(ButtonStyle.Success),
-                new ButtonBuilder().setCustomId('tts_news').setLabel('🔊 อ่านข่าวนี้').setStyle(ButtonStyle.Secondary)
+                new ButtonBuilder().setCustomId('fetch_news_now').setLabel('🔄 ข่าวใหม่').setStyle(ButtonStyle.Primary),
+                new ButtonBuilder().setCustomId('tts_news').setLabel('🔊 สรุปเสียง').setStyle(ButtonStyle.Secondary)
             );
             await channel.send({ embeds: [embed], components: [row] });
         }
@@ -67,17 +68,14 @@ client.on('clientReady', () => {
 
 client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
-    
     if (interaction.customId === 'fetch_news_now') {
         await interaction.deferReply();
         const news = await getITNewsWithSummary(1);
-        const embed = new EmbedBuilder().setColor(0x00FF00).setTitle(news[0].title).setDescription(news[0].summary);
+        const embed = new EmbedBuilder().setColor(0x57F287).setTitle(news[0].title).setDescription(news[0].summary);
         await interaction.editReply({ embeds: [embed] });
     }
-
     if (interaction.customId === 'tts_news') {
-        // จำลองการอ่านออกเสียงโดยการสรุปข้อความให้ใช้กับระบบ TTS ในเครื่องได้ง่าย
-        await interaction.reply({ content: `🎙️ **บอทกำลังเตรียมการอ่านข่าวให้คุณ...**\n(คุณสามารถใช้ฟีเจอร์ "Speak" ใน Discord มือถือหรือคอมพิวเตอร์เพื่อฟังข้อความนี้ได้ครับ)`, ephemeral: true });
+        await interaction.reply({ content: `🎙️ **สรุปข่าวสำหรับอ่านออกเสียง:** บอทสรุปเนื้อหาให้แล้ว คุณสามารถกดค้างที่ข้อความข่าวเพื่อใช้ระบบ "Speak" ของ Discord ได้เลยครับ!`, ephemeral: true });
     }
 });
 
@@ -88,21 +86,32 @@ client.on('messageCreate', async (message) => {
         const args = message.content.split(' ');
         const command = args[0].toLowerCase();
 
-        // --- [ของใหม่] !ดีเจ [อารมณ์] ---
+        // --- !ดีเจ [อารมณ์] (ปรับปรุงลิงก์ให้ก๊อปง่าย + แท็กห้องเพลง) ---
         if (command === '!ดีเจ') {
             const mood = args.slice(1).join(' ') || 'สดชื่น';
             await message.channel.sendTyping();
-            const djResult = await model.generateContent(`แนะนำเพลงจาก YouTube 1 เพลงที่เหมาะกับอารมณ์ "${mood}" พร้อมเหตุผลสั้นๆ และแปะลิงก์ YouTube ด้วย`);
-            message.reply(`🎧 **AI DJ จัดให้:**\n${djResult.response.text()}`);
+            
+            const djResult = await model.generateContent(`แนะนำเพลงจาก YouTube 1 เพลงที่เหมาะกับอารมณ์ "${mood}" โดยให้ตอบในรูปแบบ ชื่อเพลง, เหตุผล, และลิงก์แยกบรรทัดชัดเจน`);
+            const responseText = djResult.response.text();
+
+            const djEmbed = new EmbedBuilder()
+                .setColor(0xFF00FF)
+                .setAuthor({ name: 'AI DJ Personal Mix', iconURL: client.user.displayAvatarURL() })
+                .setTitle(`🎧 เพลงสำหรับอารมณ์: ${mood}`)
+                .setDescription(responseText)
+                .addFields({ name: '📍 ห้องเปิดเพลง', value: `<#${MUSIC_ROOM_ID}>`, inline: false })
+                .setFooter({ text: 'ก๊อปปี้ลิงก์ด้านบนไปเปิดในห้องเพลงได้เลย!' });
+
+            message.reply({ embeds: [djEmbed] });
         }
 
-        // --- [ของใหม่] !ทาย (Mini Game) ---
+        // --- !ทาย (Mini Game) ---
         if (command === '!ทาย') {
-            const gamePrompt = await model.generateContent("ขอโจทย์คำถามกวนๆ หรือปริศนาคำทาย 1 ข้อ พร้อมตัวเลือก A, B, C และเฉลย (เฉลยให้ใส่ไว้บรรทัดสุดท้าย)");
-            message.reply(`🎮 **เกมทายใจมาแล้ว:**\n${gamePrompt.response.text()}`);
+            const gamePrompt = await model.generateContent("ขอโจทย์คำถามกวนๆ 1 ข้อ พร้อมตัวเลือก A, B, C และเฉลยบรรทัดสุดท้าย");
+            message.reply(`🎮 **เกมทายใจ:**\n${gamePrompt.response.text()}`);
         }
 
-        // --- [ของเดิม] !ราคา ---
+        // --- !ราคา ---
         if (command === '!ราคา') {
             const coin = args[1] || 'bitcoin';
             const price = await getCryptoPrice(coin.toLowerCase());
@@ -111,23 +120,28 @@ client.on('messageCreate', async (message) => {
                 const embed = new EmbedBuilder().setColor(0xF7931A).setTitle(`📊 ราคา ${coin.toUpperCase()}`)
                     .addFields({ name: 'USD', value: `$${data.usd.toLocaleString()}`, inline: true }, { name: 'THB', value: `${data.thb.toLocaleString()} บาท`, inline: true });
                 message.reply({ embeds: [embed] });
-            } else { message.reply('❌ หาไม่เจอครับ'); }
+            } else { message.reply('❌ ไม่พบข้อมูลเหรียญครับ'); }
         }
 
-        // --- [ของเดิม] !ลบ ---
+        // --- !ลบ ---
         if (command === '!ลบ' && message.member.permissions.has('ManageMessages')) {
             const amount = parseInt(args[1]) || 5;
             await message.channel.bulkDelete(Math.min(amount + 1, 100));
         }
 
-        // --- [ของเดิม] !เตือน ---
+        // --- !เตือน ---
         if (command === '!เตือน') {
             const time = parseInt(args[1]);
             const note = args.slice(2).join(' ');
             if (!isNaN(time) && note) {
-                message.reply(`🕒 ตั้งเตือน "${note}" ในอีก ${time} นาทีแล้วครับ`);
+                message.reply(`🕒 ตั้งเตือน "${note}" ในอีก ${time} นาที`);
                 setTimeout(() => message.reply(`🔔 **เตือน:** ${note} <@${message.author.id}>`), time * 60000);
             }
+        }
+
+        // --- !test ---
+        if (command === '!test') {
+            message.reply('✅ ระบบ Super Bot Pro Max พร้อมใช้งาน! คุยกับผมได้เลย หรือใช้คำสั่ง !ดีเจ !ราคา !ข่าว !เตือน !ลบ !ทาย');
         }
 
     } else {
@@ -135,7 +149,11 @@ client.on('messageCreate', async (message) => {
         try {
             await message.channel.sendTyping();
             const result = await model.generateContent(message.content);
-            const aiEmbed = new EmbedBuilder().setColor(0x5865F2).setAuthor({ name: 'Gemini AI Pro' }).setDescription(result.response.text().slice(0, 4000));
+            const aiEmbed = new EmbedBuilder()
+                .setColor(0x5865F2)
+                .setAuthor({ name: 'Gemini AI Assistant' })
+                .setDescription(result.response.text().slice(0, 4000))
+                .setFooter({ text: 'คุยกับผมได้เลย ไม่ต้องใช้ !ถาม แล้วนะครับ' });
             await message.reply({ embeds: [aiEmbed] });
         } catch (e) { console.error(e); }
     }
