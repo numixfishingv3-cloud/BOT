@@ -19,74 +19,100 @@ const client = new Client({
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
-client.on('ready', () => {
-    console.log(`✅ บอท ${client.user.tag} พร้อมทำงานบน Cloud แล้ว!`);
+client.on('clientReady', () => {
+    console.log(`✅ บอท ${client.user.tag} ออนไลน์บน Cloud พร้อมใช้งาน 24 ชม.!`);
     
-    // ระบบแจ้งข่าว (ทำงานทุก 1 ชม.)
+    // --- ระบบแจ้งข่าวอัตโนมัติทุก 30 นาที ---
     setInterval(async () => {
         try {
             const channel = client.channels.cache.get(NEWS_CHANNEL_ID);
             if (!channel) return;
 
-            const feed = await parser.parseURL('https://www.blognone.com/atom.xml');
+            const feed = await parser.parseURL('https://www.sanook.com/news/rss/latest/');
             const latestPost = feed.items[0];
             
-            const embed = new EmbedBuilder()
-                .setColor(0x0099FF)
-                .setTitle(`📰 ข่าวล่าสุด: ${latestPost.title}`)
+            const newsEmbed = new EmbedBuilder()
+                .setColor(0x00FF7F) // สีเขียวสว่าง
+                .setTitle(`🌟 ข่าวอัปเดตใหม่: ${latestPost.title}`)
                 .setURL(latestPost.link)
-                .setDescription('คลิกที่หัวข้อเพื่ออ่านรายละเอียด')
+                .setDescription(latestPost.contentSnippet ? latestPost.contentSnippet.slice(0, 150) + '...' : 'คลิกเพื่ออ่านรายละเอียดเพิ่มเติม')
+                .addFields(
+                    { name: '📅 วันที่เผยแพร่', value: latestPost.pubDate || 'เพิ่งเมื่อสักครู่', inline: true },
+                    { name: '🔗 แหล่งข่าว', value: 'Sanook News', inline: true }
+                )
+                .setFooter({ text: 'ระบบแจ้งข่าวอัตโนมัติทุก 30 นาที' })
                 .setTimestamp();
 
-            channel.send({ embeds: [embed] });
+            await channel.send({ embeds: [newsEmbed] });
+            console.log("✅ ส่งข่าวอัตโนมัติเรียบร้อย");
         } catch (error) {
             console.error('RSS Error:', error.message);
         }
-    }, 3600000); 
+    }, 1800000); // 1,800,000 ms = 30 นาที
 });
 
 client.on('messageCreate', async (message) => {
     if (message.author.bot) return;
 
-    // ระบบ AI ถาม-ตอบ
+    // --- 1. ระบบ AI ถาม-ตอบ (!ถาม) ---
     if (message.content.startsWith('!ถาม')) {
         const prompt = message.content.replace('!ถาม', '').trim();
-        if (!prompt) return message.reply('พิมพ์คำถามมาได้เลย!');
+        if (!prompt) return message.reply('พิมพ์คำถามที่คุณอยากรู้มาได้เลยครับ!');
 
         try {
             const result = await model.generateContent(prompt);
-            message.reply(result.response.text());
+            const responseText = result.response.text();
+
+            const aiEmbed = new EmbedBuilder()
+                .setColor(0x5865F2) // สีน้ำเงิน Discord
+                .setAuthor({ name: 'Gemini AI Intelligence', iconURL: client.user.displayAvatarURL() })
+                .setDescription(responseText)
+                .setFooter({ text: `ถามโดย ${message.author.username}`, iconURL: message.author.displayAvatarURL() })
+                .setTimestamp();
+
+            await message.reply({ embeds: [aiEmbed] });
         } catch (e) {
             console.error(e);
-            message.reply('❌ AI ไม่สามารถตอบได้ในขณะนี้');
+            message.reply('❌ AI ไม่สามารถประมวลผลได้ในขณะนี้ กรุณาลองใหม่ครับ');
         }
     }
 
-    // ระบบแจ้งเตือน
+    // --- 2. ระบบแจ้งเตือน (!เตือน) ---
     if (message.content.startsWith('!เตือน')) {
         const args = message.content.split(' ');
         const time = parseInt(args[1]);
         const note = args.slice(2).join(' ');
 
-        if (isNaN(time) || !note) return message.reply('ใช้แบบนี้: `!เตือน 5 ไปกินข้าว`');
+        if (isNaN(time) || !note) {
+            return message.reply('💡 วิธีใช้: `!เตือน 5 ไปกินข้าว` (ตัวเลขคือนาที)');
+        }
 
-        message.reply(`🕒 จะเตือนเรื่อง **"${note}"** ในอีก ${time} นาที`);
+        const remindEmbed = new EmbedBuilder()
+            .setColor(0xFEE75C) // สีเหลือง
+            .setDescription(`🕒 รับทราบ! ผมจะมาเตือนเรื่อง **"${note}"** ในอีก ${time} นาทีครับ`);
+
+        message.reply({ embeds: [remindEmbed] });
+
         setTimeout(() => {
-            message.reply(`🔔 **แจ้งเตือน:** ${note}`);
+            const alertEmbed = new EmbedBuilder()
+                .setColor(0xED4245) // สีแดงแจ้งเตือน
+                .setTitle('🔔 การแจ้งเตือน!')
+                .setDescription(`ถึงเวลาแล้วครับ: **${note}**`)
+                .setTimestamp();
+
+            message.reply({ content: `<@${message.author.id}>`, embeds: [alertEmbed] });
         }, time * 60000);
+    }
+
+    // --- 3. คำสั่งทดสอบระบบข่าว (!test) ---
+    if (message.content === '!test') {
+        try {
+            const feed = await parser.parseURL('https://www.sanook.com/news/rss/latest/');
+            message.reply(`✅ ระบบข่าวปกติ: ${feed.items[0].title}`);
+        } catch (err) {
+            message.reply(`❌ ระบบข่าวมีปัญหา: ${err.message}`);
+        }
     }
 });
 
 client.login(DISCORD_TOKEN);
-
-// คำสั่งเช็กข่าวแบบกดมือ (พิมพ์ !test ใน Discord)
-client.on('messageCreate', async (message) => {
-    if (message.content === '!test') {
-        try {
-        const feed = await parser.parseURL('https://droidsans.com/feed/');
-            message.reply(`ดึงข่าวได้แล้ว! หัวข้อคือ: ${feed.items[0].title}`);
-        } catch (err) {
-            message.reply(`ดึงข่าวไม่สำเร็จ: ${err.message}`);
-        }
-    }
-}); 
