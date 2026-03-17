@@ -83,10 +83,10 @@ client.login(DISCORD_TOKEN);
 client.on('messageCreate', async (message) => {
     if (message.content === '!test') {
         try {
-            const feed = await parser.parseURL('https://news.thaipbs.or.th/rss/news/latest');
+        const feed = await parser.parseURL('https://droidsans.com/feed/');
             message.reply(`ดึงข่าวได้แล้ว! หัวข้อคือ: ${feed.items[0].title}`);
         } catch (err) {
             message.reply(`ดึงข่าวไม่สำเร็จ: ${err.message}`);
         }
     }
-});
+}); 
