@@ -18,6 +18,7 @@ const client = new Client({
 const genAI = new GoogleGenerativeAI(GEMINI_API_KEY);
 const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
+// ฟังก์ชันดึงข่าว IT
 async function getITNews(limit = 1) {
     try {
         let url = 'https://news.google.com/rss/search?q=technology+when:1h&hl=th&gl=TH&ceid=TH:th';
@@ -34,30 +35,31 @@ async function getITNews(limit = 1) {
 }
 
 client.on('clientReady', () => {
-    console.log(`✅ บอท ${client.user.tag} พร้อมคุยแบบไม่ต้องใช้คำสั่งแล้ว!`);
+    console.log(`✅ บอท ${client.user.tag} พร้อมคุยและส่งข่าวแล้ว!`);
     
+    // ส่งข่าวอัตโนมัติทุก 30 นาที
     setInterval(async () => {
         try {
             const channel = client.channels.cache.get(NEWS_CHANNEL_ID);
             if (!channel) return;
             const news = await getITNews(1);
             if (news.length > 0) {
-                const title = news[0].title || "ไม่มีหัวข้อข่าว";
-                const newsEmbed = new EmbedBuilder()
+                const embed = new EmbedBuilder()
                     .setColor(0x00BFFF)
-                    .setTitle(`💻 ข่าวไอทีล่าสุด: ${title.slice(0, 250)}`)
+                    .setTitle(`💻 อัปเดตไอทีอัตโนมัติ: ${news[0].title.slice(0, 250)}`)
                     .setURL(news[0].link)
-                    .setFooter({ text: 'กดปุ่มเพื่อดึงข่าวใหม่' })
+                    .setFooter({ text: 'กดปุ่มด้านล่างเพื่อดึงข่าวใหม่' })
                     .setTimestamp();
                 const row = new ActionRowBuilder().addComponents(
                     new ButtonBuilder().setCustomId('fetch_news_now').setLabel('🔄 ดึงข่าวใหม่ทันที').setStyle(ButtonStyle.Primary)
                 );
-                await channel.send({ embeds: [newsEmbed], components: [row] });
+                await channel.send({ embeds: [embed], components: [row] });
             }
         } catch (error) { console.error(error); }
     }, 1800000); 
 });
 
+// ระบบจัดการปุ่มกด
 client.on('interactionCreate', async interaction => {
     if (!interaction.isButton()) return;
     if (interaction.customId === 'fetch_news_now') {
@@ -67,7 +69,7 @@ client.on('interactionCreate', async interaction => {
             if (news.length > 0) {
                 const embed = new EmbedBuilder()
                     .setColor(0x57F287)
-                    .setTitle(`🆕 ข่าวสดใหม่: ${news[0].title.slice(0, 250)}`)
+                    .setTitle(`🆕 ข่าวสดใหม่ (จากปุ่ม): ${news[0].title.slice(0, 250)}`)
                     .setURL(news[0].link)
                     .setTimestamp();
                 await interaction.editReply({ embeds: [embed] });
@@ -77,11 +79,11 @@ client.on('interactionCreate', async interaction => {
 });
 
 client.on('messageCreate', async (message) => {
-    // 1. ป้องกันบอทคุยกันเอง และเช็กข้อความว่าง
     if (message.author.bot || !message.content) return;
 
-    // 2. ถ้าข้อความขึ้นต้นด้วย ! (เป็นคำสั่ง) ให้ไปทำตามคำสั่งนั้นๆ
+    // --- ส่วนของคำสั่งที่มีเครื่องหมาย ! ---
     if (message.content.startsWith('!')) {
+        
         if (message.content.startsWith('!ข่าว')) {
             const num = parseInt(message.content.split(' ')[1]) || 1;
             const newsList = await getITNews(Math.min(num, 5));
@@ -106,28 +108,28 @@ client.on('messageCreate', async (message) => {
 
         if (message.content === '!test') {
             const news = await getITNews(1);
-            const testEmbed = new EmbedBuilder().setColor(0x57F287).setTitle(`✅ ระบบ OK: ${news[0]?.title}`);
-            const row = new ActionRowBuilder().addComponents(new ButtonBuilder().setCustomId('fetch_news_now').setLabel('🔄 ลองกดปุ่ม').setStyle(ButtonStyle.Primary));
+            const testEmbed = new EmbedBuilder()
+                .setColor(0x57F287)
+                .setTitle(`✅ ระบบปกติ: ${news[0]?.title.slice(0, 250)}`)
+                .setDescription('ทดสอบระบบปุ่มกดด้านล่างได้เลยครับ');
+            const row = new ActionRowBuilder().addComponents(
+                new ButtonBuilder().setCustomId('fetch_news_now').setLabel('🔄 ลองกดปุ่ม').setStyle(ButtonStyle.Primary)
+            );
             return message.reply({ embeds: [testEmbed], components: [row] });
         }
+
     } else {
-        // 3. ถ้าไม่มี ! นำหน้า ให้บอทตอบแบบ AI อัตโนมัติ (ไม่ต้องพิมพ์ !ถาม)
+        // --- ส่วนของการคุยปกติ (ไม่ต้องพิมพ์ !ถาม) ---
         try {
-            // แสดงสถานะว่าบอทกำลังพิมพ์ (Typing...) ให้ดูเหมือนคนคุย
             await message.channel.sendTyping();
-            
             const result = await model.generateContent(message.content);
             const aiEmbed = new EmbedBuilder()
                 .setColor(0x5865F2)
-                .setAuthor({ name: 'Gemini AI Response', iconURL: client.user.displayAvatarURL() })
+                .setAuthor({ name: 'Gemini AI Assistant', iconURL: client.user.displayAvatarURL() })
                 .setDescription(result.response.text().slice(0, 4000))
                 .setTimestamp();
-            
             await message.reply({ embeds: [aiEmbed] });
-        } catch (e) {
-            console.error(e);
-            // ไม่ต้องแจ้ง Error เพื่อไม่ให้รกแชทเวลาคุยเล่นทั่วไป
-        }
+        } catch (e) { console.error(e); }
     }
 });
 
